@@ -20,6 +20,17 @@ variable "public_key_path" {
   default = "~/.ssh/id_rsa.pub" # replace with the path to your public key file
 }
 
+#Data
+
+data "template_file" "user_data_ansible_srv" {
+  template = file("user_data_ansible_srv.sh")
+}
+
+
+data "template_file" "user_data_client" {
+  template = file("user_data_client.sh")
+}
+
 # Resources
 
 
@@ -34,8 +45,6 @@ resource "aws_security_group" "ingress" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-
-
   egress {
     from_port   = 0
     to_port     = 0
@@ -48,38 +57,11 @@ resource "aws_instance" "ansible_srv" {
   ami           = var.ami_id
   instance_type = var.instance_type
   key_name      = var.key_name
+  user_data     = data.template_file.user_data_ansible_srv.rendered
   vpc_security_group_ids = [
 
     aws_security_group.ingress.id,
   ]
-
-  user_data = <<-EOF
-#!/bin/bash
-
-set -e #exit on any error
-
-# Update package repositories and install Ansible
-sudo apt-get update -y
-sudo apt-get install ansible -y
-
-# Generate SSH key pair if it doesn't already exist
-if [ ! -f ~/.ssh/id_rsa ]; then
-    ssh-keygen -t rsa -N "" -f ~/.ssh/id_rsa
-fi
-
-# Clone the Ansible playbook repository
-if [ ! -d ~/docker-zabbix_agent-ansible ]; then
-    git clone https://github.com/Mirsaid/docker-zabbix_agent-ansible.git ~/docker-zabbix_agent-ansible
-else
-    cd ~/docker-zabbix_agent-ansible
-    git fetch origin
-    git reset --hard origin/master
-fi
-
-# Set permissions on the SSH private key
-chmod 600 ~/.ssh/id_rsa
-
-EOF
 
   subnet_id                   = aws_subnet.example_public_subnet.id # associate instance with public subnet
   associate_public_ip_address = true                                # assign a public IP address to the instance
@@ -89,17 +71,11 @@ resource "aws_instance" "test_client" {
   ami           = var.ami_id
   instance_type = var.instance_type
   key_name      = var.key_name
+  user_data     = data.template_file.user_data_client.rendered
   vpc_security_group_ids = [
 
     aws_security_group.ingress.id,
   ]
-  user_data = <<-EOF
-              #!/bin/bash
-              sudo apt-get update -y
-              sudo apt-get install python -y
-             
-                
-              EOF
 
   subnet_id                   = aws_subnet.example_public_subnet.id # associate instance with public subnet
   associate_public_ip_address = true                                # assign a public IP address to the instance
